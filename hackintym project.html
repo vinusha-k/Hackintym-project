@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prescription Analyzer - AI-Powered Medical Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .medical-bg {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+        .card-hover {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .upload-area {
+            border: 2px dashed #cbd5e0;
+            transition: all 0.3s ease;
+        }
+        .upload-area.dragover {
+            border-color: #667eea;
+            background-color: #f0f4ff;
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .medicine-card {
+            border-left: 4px solid #3b82f6;
+        }
+        .warning-card {
+            border-left: 4px solid #f59e0b;
+        }
+        .critical-card {
+            border-left: 4px solid #ef4444;
+        }
+        .loading-dots:after {
+            content: '';
+            animation: dots 1.5s steps(5, end) infinite;
+        }
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60% { content: '...'; }
+            80%, 100% { content: ''; }
+        }
+        .prescription-image {
+            max-height: 300px;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body class="medical-bg min-h-screen">
+    <!-- Header -->
+    <header class="gradient-bg text-white shadow-lg">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="flex items-center mb-4 md:mb-0">
+                    <i class="fas fa-prescription-bottle-alt text-3xl mr-3"></i>
+                    <div>
+                        <h1 class="text-2xl font-bold">Prescription Analyzer</h1>
+                        <p class="text-blue-100">AI-Powered Medical Analysis</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="apiKeyBtn" class="bg-white text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-blue-50 transition duration-300">
+                        <i class="fas fa-key mr-2"></i>API Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- API Key Modal -->
+    <div id="apiKeyModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 hidden">
+        <div class="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md">
+            <div class="text-center mb-6">
+                <i class="fas fa-key text-3xl text-blue-500 mb-3"></i>
+                <h2 class="text-2xl font-bold text-gray-800">Gemini AI API Key</h2>
+                <p class="text-gray-600 mt-2">Enter your Gemini API key to enable AI analysis</p>
+            </div>
+            <div class="mb-6">
+                <label class="block text-gray-700 text-sm font-medium mb-2" for="apiKey">Gemini API Key</label>
+                <input id="apiKey" type="password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                       placeholder="Enter your API key" value="">
+                <p class="text-xs text-gray-500 mt-2">
+                    Get your API key from 
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 hover:underline">Google AI Studio</a>
+                </p>
+            </div>
+            <div class="flex space-x-3">
+                <button id="saveApiKey" class="flex-1 gradient-bg text-white py-3 rounded-lg font-semibold hover:opacity-90 transition duration-300">Save Key</button>
+                <button id="closeApiKey" class="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-400 transition duration-300">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Upload Section -->
+            <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Upload Prescription Image</h2>
+                <p class="text-gray-600 mb-4">Upload a clear image of your prescription. We support JPG, PNG, and PDF formats.</p>
+                
+                <div id="uploadArea" class="upload-area rounded-lg p-8 text-center mb-4 cursor-pointer">
+                    <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
+                    <p class="text-gray-600">Drag & drop your prescription image here or</p>
+                    <button id="browseBtn" class="mt-3 gradient-bg text-white px-4 py-2 rounded-lg font-medium">Browse Files</button>
+                    <p class="text-xs text-gray-500 mt-2">Supports: JPG, PNG, PDF (Max 10MB)</p>
+                    <input type="file" id="fileInput" class="hidden" accept=".pdf,.jpg,.jpeg,.png">
+                </div>
+                
+                <div class="flex space-x-3">
+                    <button class="flex-1 bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition duration-300">
+                        <i class="fas fa-camera mr-2"></i> Take Photo
+                    </button>
+                    <button id="analyzeBtn" class="flex-1 bg-green-600 text-white py-2 rounded-lg font-medium hover:bg-green-700 transition duration-300">
+                        <i class="fas fa-robot mr-2"></i> Analyze with AI
+                    </button>
+                </div>
+
+                <!-- Preview Section -->
+                <div id="previewSection" class="mt-6 hidden">
+                    <h3 class="font-semibold text-gray-700 mb-2">Prescription Preview:</h3>
+                    <div id="imagePreview" class="border rounded-lg p-4 bg-gray-50 flex justify-center">
+                        <!-- Image preview will be inserted here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Results -->
+            <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">AI Analysis Results</h2>
+                
+                <div id="analysisResults">
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-prescription-bottle text-4xl mb-3 text-gray-400"></i>
+                        <p>Upload a prescription image to see AI analysis results</p>
+                        <p class="text-sm mt-2">Gemini AI will analyze your prescription and explain it in simple language</p>
+                    </div>
+                </div>
+
+                <!-- AI Analysis Status -->
+                <div id="aiStatus" class="hidden mt-4 p-4 bg-blue-50 rounded-lg">
+                    <div class="flex items-center">
+                        <i class="fas fa-robot text-blue-500 mr-3"></i>
+                        <div>
+                            <p class="text-sm font-medium text-blue-800">Gemini AI is analyzing your prescription</p>
+                            <p class="text-xs text-blue-600">This may take a few seconds</p>
+                        </div>
+                        <div class="ml-auto loading-dots"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Analysis Section -->
+        <div id="detailedAnalysis" class="mt-8 hidden">
+            <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Detailed Analysis</h2>
+                <div id="analysisContent" class="space-y-6">
+                    <!-- Analysis content will be inserted here -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white mt-12 py-6">
+        <div class="container mx-auto px-4 text-center">
+            <p>Prescription Analyzer &copy; 2023 - AI-Powered Medical Analysis Tool</p>
+            <p class="text-gray-400 text-sm mt-2">This tool provides informational analysis only. Always consult with healthcare professionals.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Helper function to convert file to base64
+        function fileToGenerativePart(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    // remove the data:mime/type;base64, part
+                    const base64Data = reader.result.split(',')[1];
+                    resolve({
+                        inlineData: {
+                            mimeType: file.type,
+                            data: base64Data
+                        }
+                    });
+                };
+                reader.onerror = (err) => {
+                    reject(err);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Gemini AI Integration Class
+        class PrescriptionAnalyzer {
+            constructor(apiKey) {
+                this.apiKey = apiKey;
+                this.baseURL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+            }
+
+            async analyzePrescription(imageFile) {
+                if (!this.apiKey) {
+                    throw new Error('Gemini API key is required. Please set it in the API Settings.');
+                }
+
+                const imagePart = await fileToGenerativePart(imageFile);
+
+                const prompt = `
+                You are a helpful medical assistant AI. Analyze the provided prescription image and explain it in simple, patient-friendly language. Your response must be in markdown format.
+
+                Structure your analysis into the following sections:
+
+                ### 💊 Medicines Prescribed
+                List each medication. For each one, provide a simple, one-sentence explanation of its purpose.
+
+                ### 📋 Dosage Instructions
+                Clearly explain when and how to take each medicine (e.g., "Twice a day after meals").
+
+                ### ⚠️ Important Notes & Warnings
+                List any critical warnings, side effects, or precautions mentioned or generally applicable.
+
+                ### ⏳ Duration
+                State how long the patient should take the medication, if specified.
+
+                ### ❓ General Purpose
+                Provide a brief, overall summary of what the prescription is for.
+
+                Make the entire explanation easy for a non-medical person to understand. Avoid complex jargon. If the image is unclear or not a prescription, state that clearly.
+                `;
+
+                try {
+                    const response = await fetch(`${this.baseURL}?key=${this.apiKey}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [
+                                    { text: prompt },
+                                    imagePart
+                                ]
+                            }]
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error?.message || `API request failed: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    if (!data.candidates || !data.candidates[0].content.parts[0].text) {
+                        throw new Error("Received an invalid response from the AI. The analysis could not be completed.");
+                    }
+                    return this.formatAnalysis(data.candidates[0].content.parts[0].text);
+                } catch (error) {
+                    console.error('Gemini AI analysis error:', error);
+                    throw error;
+                }
+            }
+
+            formatAnalysis(markdownText) {
+                // This is a simplified parser. A more robust solution would use a markdown library.
+                const formatted = {
+                    medicines: [],
+                    instructions: '',
+                    warnings: [],
+                    duration: '',
+                    purpose: ''
+                };
+
+                const sections = {
+                    'medicines prescribed': 'medicines',
+                    'dosage instructions': 'instructions',
+                    'important notes & warnings': 'warnings',
+                    'duration': 'duration',
+                    'general purpose': 'purpose'
+                };
+
+                let currentSection = null;
+                const lines = markdownText.split('\n');
+
+                for (const line of lines) {
+                    const trimmedLine = line.trim();
+                    if (trimmedLine.startsWith('###')) {
+                        const header = trimmedLine.replace('###', '').replace('💊', '').replace('📋', '').replace('⚠️', '').replace('⏳', '').replace('❓', '').trim().toLowerCase();
+                        currentSection = sections[header] || null;
+                        continue;
+                    }
+
+                    if (currentSection && trimmedLine) {
+                        if (currentSection === 'medicines' || currentSection === 'warnings') {
+                            formatted[currentSection].push(trimmedLine.replace(/^-|^\*/, '').trim());
+                        } else {
+                            formatted[currentSection] += (formatted[currentSection] ? '\n' : '') + trimmedLine;
+                        }
+                    }
+                }
+                
+                return {
+                    rawText: markdownText,
+                    formatted: formatted
+                };
+            }
+        }
+
+        // Global Variables
+        let prescriptionAnalyzer = null;
+        let currentFile = null;
+
+        // DOM Elements
+        const apiKeyModal = document.getElementById('apiKeyModal');
+        const apiKeyInput = document.getElementById('apiKey');
+        const saveApiKeyBtn = document.getElementById('saveApiKey');
+        const closeApiKeyBtn = document.getElementById('closeApiKey');
+        const apiKeyBtn = document.getElementById('apiKeyBtn');
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const browseBtn = document.getElementById('browseBtn');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const previewSection = document.getElementById('previewSection');
+        const imagePreview = document.getElementById('imagePreview');
+        const analysisResults = document.getElementById('analysisResults');
+        const aiStatus = document.getElementById('aiStatus');
+        const detailedAnalysis = document.getElementById('detailedAnalysis');
+        const analysisContent = document.getElementById('analysisContent');
+
+        // Initialize from localStorage
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedApiKey = localStorage.getItem('geminiApiKey');
+            if (savedApiKey) {
+                apiKeyInput.value = savedApiKey;
+                prescriptionAnalyzer = new PrescriptionAnalyzer(savedApiKey);
+            }
+        });
+
+        // API Key Management
+        apiKeyBtn.addEventListener('click', () => {
+            apiKeyModal.classList.remove('hidden');
+        });
+
+        closeApiKeyBtn.addEventListener('click', () => {
+            apiKeyModal.classList.add('hidden');
+        });
+
+        saveApiKeyBtn.addEventListener('click', () => {
+            const apiKey = apiKeyInput.value.trim();
+            if (apiKey) {
+                localStorage.setItem('geminiApiKey', apiKey);
+                prescriptionAnalyzer = new PrescriptionAnalyzer(apiKey);
+                apiKeyModal.classList.add('hidden');
+                showNotification('API key saved successfully!', 'success');
+            } else {
+                showNotification('Please enter a valid API key', 'error');
+            }
+        });
+
+        // File Upload Handling
+        browseBtn.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                currentFile = this.files[0];
+                handleFileSelection(currentFile);
+            }
+        });
+
+        uploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', function() {
+            this.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                currentFile = e.dataTransfer.files[0];
+                fileInput.files = e.dataTransfer.files;
+                handleFileSelection(currentFile);
+            }
+        });
+
+        function handleFileSelection(file) {
+            const fileName = file.name;
+            const fileSize = (file.size / 1024 / 1024).toFixed(2);
+            
+            if (fileSize > 10) {
+                showNotification('File size exceeds 10MB limit. Please choose a smaller file.', 'error');
+                return;
+            }
+
+            if (!file.type.match('image.*') && file.type !== 'application/pdf') {
+                showNotification('Please select an image or PDF file.', 'error');
+                return;
+            }
+
+            // Update upload area
+            uploadArea.innerHTML = `
+                <i class="fas fa-file-medical text-4xl text-green-500 mb-3"></i>
+                <p class="text-gray-800 font-medium">${fileName}</p>
+                <p class="text-gray-600 text-sm mt-2">${fileSize} MB • Ready for analysis</p>
+                <button id="changeFileBtn" class="mt-3 text-blue-600 hover:text-blue-800">Change file</button>
+            `;
+
+            document.getElementById('changeFileBtn').addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            // Show preview
+            showImagePreview(file);
+        }
+
+        function showImagePreview(file) {
+            previewSection.classList.remove('hidden');
+            imagePreview.innerHTML = '';
+
+            if (file.type.match('image.*')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.alt = 'Prescription preview';
+                    img.className = 'prescription-image max-w-full rounded';
+                    imagePreview.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            } else {
+                imagePreview.innerHTML = `
+                    <div class="text-center py-8">
+                        <i class="fas fa-file-pdf text-4xl text-red-500 mb-3"></i>
+                        <p class="text-gray-700">PDF file ready for analysis</p>
+                        <p class="text-sm text-gray-500">${file.name}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Analysis Function
+        analyzeBtn.addEventListener('click', async function() {
+            if (!currentFile) {
+                showNotification('Please select a prescription image first!', 'error');
+                return;
+            }
+
+            if (!prescriptionAnalyzer) {
+                showNotification('Please set up your Gemini API key first.', 'error');
+                apiKeyModal.classList.remove('hidden');
+                return;
+            }
+
+            // Show AI analysis status
+            aiStatus.classList.remove('hidden');
+            analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Analyzing...';
+            analyzeBtn.disabled = true;
+
+            try {
+                // For this demo, we'll simulate analyzing the image
+                // In a real application, you would send the image data to the API
+                const analysis = await prescriptionAnalyzer.analyzePrescription(currentFile);
+                displayAnalysisResults(analysis);
+            } catch (error) {
+                console.error('Analysis error:', error);
+                analysisResults.innerHTML = `
+                    <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
+                        <div class="flex items-center">
+                            <i class="fas fa-exclamation-triangle text-red-500 mr-3"></i>
+                            <div>
+                                <p class="text-red-700 font-medium">Analysis Error</p>
+                                <p class="text-red-600 text-sm">${error.message}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } finally {
+                aiStatus.classList.add('hidden');
+                analyzeBtn.innerHTML = '<i class="fas fa-robot mr-2"></i> Analyze with AI';
+                analyzeBtn.disabled = false;
+            }
+        });
+
+        function displayAnalysisResults(analysis) {
+            // Update main results card
+            analysisResults.innerHTML = `
+                <div class="bg-green-50 border-l-4 border-green-500 p-4 rounded-lg mb-4">
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                        <div>
+                            <p class="text-green-700 font-medium">Analysis Complete</p>
+                            <p class="text-green-600 text-sm">Your prescription has been analyzed successfully</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <h3 class="font-semibold text-gray-700 mb-2">Medicines Found:</h3>
+                        <p class="text-gray-600">${analysis.formatted.medicines.map(m => m.split(' ')[0]).join(', ') || 'No specific medicines identified'}</p>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-gray-700 mb-2">Key Instructions:</h3>
+                        <p class="text-gray-600">${analysis.formatted.instructions.split('\n')[0] || 'Follow your doctor\'s instructions carefully'}</p>
+                    </div>
+                </div>
+            `;
+
+            // Show detailed analysis
+            detailedAnalysis.classList.remove('hidden');
+            analysisContent.innerHTML = createDetailedAnalysisHTML(analysis);
+        }
+
+        function createDetailedAnalysisHTML(analysis) {
+            return `
+                <div class="medicine-card bg-blue-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-blue-800 mb-3 flex items-center">
+                        <i class="fas fa-pills mr-2"></i> Medicines Prescribed
+                    </h3>
+                    <div class="space-y-3">
+                        ${analysis.formatted.medicines.length > 0 ? analysis.formatted.medicines.map(medicine => `
+                            <div class="bg-white p-3 rounded-lg shadow-sm">
+                                <p class="font-medium text-gray-800">${medicine}</p>
+                            </div>
+                        `).join('') : '<p class="text-sm text-gray-600">No medicines were clearly identified.</p>'}
+                    </div>
+                </div>
+
+                <div class="bg-green-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-green-800 mb-3 flex items-center">
+                        <i class="fas fa-clock mr-2"></i> Dosage Instructions
+                    </h3>
+                    <p class="text-green-700 whitespace-pre-wrap">${analysis.formatted.instructions || 'Follow the timing instructions provided by your healthcare provider.'}</p>
+                </div>
+
+                <div class="warning-card bg-yellow-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-yellow-800 mb-3 flex items-center">
+                        <i class="fas fa-exclamation-triangle mr-2"></i> Important Notes
+                    </h3>
+                    <ul class="space-y-2">
+                        ${analysis.formatted.warnings.length > 0 ? analysis.formatted.warnings.map(warning => `
+                            <li class="text-yellow-700 flex items-start">
+                                <i class="fas fa-circle text-xs mt-1.5 mr-2 flex-shrink-0"></i>
+                                <span>${warning}</span>
+                            </li>
+                        `).join('') : '<li class="text-yellow-700">No specific warnings were highlighted.</li>'}
+                    </ul>
+                </div>
+
+                <div class="bg-purple-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-purple-800 mb-3 flex items-center">
+                        <i class="fas fa-info-circle mr-2"></i> General Purpose
+                    </h3>
+                    <p class="text-purple-700">${analysis.formatted.purpose || 'The overall purpose was not summarized.'}</p>
+                </div>
+
+                <div class="bg-gray-100 p-4 rounded-lg">
+                    <h3 class="font-semibold text-gray-800 mb-3 flex items-center">
+                        <i class="fas fa-robot mr-2"></i> Raw AI Response
+                    </h3>
+                    <pre class="text-xs text-gray-600 bg-white p-3 rounded whitespace-pre-wrap font-mono">${analysis.rawText}</pre>
+                </div>
+            `;
+        }
+
+        // Utility Functions
+        function showNotification(message, type = 'info') {
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 transform transition-transform duration-300 ${
+                type === 'error' ? 'bg-red-500 text-white' : 
+                type === 'success' ? 'bg-green-500 text-white' : 'bg-blue-500 text-white'
+            }`;
+            notification.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas fa-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info-circle'} mr-2"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+
+            document.body.appendChild(notification);
+
+            // Remove after 5 seconds
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
